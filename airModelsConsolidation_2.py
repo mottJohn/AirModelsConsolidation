@@ -9,21 +9,21 @@ from __future__ import division
 ##############################
 
 #leave path empty if no use
-path_cmaq = r'C:\Users\CHA82870\Mott MacDonald\AERMOD Modelling Services - Do\06 Working\PATH\cmaq'
-path_chimney = r'D:\Hirams Highway\AirModelsConsolidation\mTSPt2\Chimney' #Chimney
-path_construction = r'D:\Hirams Highway\AirModelsConsolidation\mTSPt2\Construction_ASRs'#construction
-path_caline = r'' #caline
-path_marine = r'' #marine
-path_all = r'D:\Hirams Highway\AirModelsConsolidation\mTSPt2\All_model_sum'
-excel_name = r'D:\Hirams Highway\AirModelsConsolidation\mTSPt2\mTSPt2_breakdown.xlsx'
-ASR_list = r'C:\Users\CHA82870\Mott MacDonald\AERMOD Modelling Services - Do\06 Working\Program\REAL\ASR_list.xlsx'
+path_cmaq = r'E:\MottMacDonald_201904\AERMOD Modelling Services - Do\06 Working\PATH\cmaq'
+path_chimney = r'E:\MottMacDonald_201904\Documents\AirModelsConsolidation\umRSPan\Chimney' #Chimney
+path_construction = r'E:\MottMacDonald_201904\Documents\AirModelsConsolidation\umRSPan\Construction_ASRs'#construction
+path_caline = r'E:\MottMacDonald_201904\Documents\AirModelsConsolidation\umRSPan\Caline_ASRs\RSP' #caline
+path_marine = r'E:\MottMacDonald_201904\Documents\AirModelsConsolidation\umRSPan\Marine\RSP' #marine
+path_all = r'E:\MottMacDonald_201904\Documents\AirModelsConsolidation\umRSPan\All_model_sum'
+excel_name = r'E:\MottMacDonald_201904\Documents\AirModelsConsolidation\umRSPan\umRSPan_all_breakdown.xlsx'
+ASR_list = r'E:\MottMacDonald_201904\AERMOD Modelling Services - Do\06 Working\Program\REAL\ASR_list.xlsx'
 
-grids = ['48_38']
+grids = ['48_38', '49_38', '49_39', '49_40', '50_40', '50_41']
 
 #comment out if not use
-pollutants = 1 #TSP
+#pollutants = 1 #TSP
 #pollutants = 2 #RSP (PM10) daily
-#pollutants = 3 #RSP (PM10) annual
+pollutants = 3 #RSP (PM10) annual
 #pollutants = 4 #FSP (PM2.5) daily
 #pollutants = 5 #FSP (PM2.5) annual
 
@@ -94,24 +94,32 @@ import numpy as np
 import glob
 
 def getFiles (path, type):
-    filteredFiles = []
     allFiles = glob.glob(path + "/*.{}".format(type))
     
+    for files in allFiles:
+        if files.find("~$") != -1:
+            allFiles.remove(files)
     return allFiles
 
-def readAermod(aermod):
-    xls = pd.ExcelFile(aermod)
-    aermod = xls.parse('Sheet1')
-    aermod = aermod.drop(aermod.columns[[0,1]], axis = 1)
-    aermod.columns = aermod.loc[0] #set columns equal to row 1
-    aermod = aermod.drop([0,1])
-    aermod = aermod[:-24] #drop last 24 rows
-    aermod = aermod.dropna(axis = 1, how='all') #drop nan columns
-    aermod = aermod.reset_index(drop=True)
-    lstCols = aermod.columns.tolist()
-    lstCols[0]='Time'
-    aermod.columns = lstCols
-    aermod = aermod.apply(pd.to_numeric)
+def readAermod(aermod, parse):
+    if parse == False:
+        xls = pd.ExcelFile(aermod)
+        aermod = xls.parse('Sheet1')
+        aermod = aermod.apply(pd.to_numeric)
+    elif parse == True:
+        xls = pd.ExcelFile(aermod)
+        aermod = xls.parse('Sheet1', header = 2)
+        aermod = aermod.drop(aermod.columns[[0,1]], axis = 1)
+        #print(aermod)
+        #aermod.columns = aermod.loc[0] #set columns equal to row 1
+        aermod = aermod.drop([0])
+        aermod = aermod[:-24] #drop last 24 rows
+        aermod = aermod.dropna(axis = 1, how='all') #drop nan columns
+        aermod = aermod.reset_index(drop=True)
+        lstCols = aermod.columns.tolist()
+        lstCols[0]='Time'
+        aermod.columns = lstCols
+        aermod = aermod.apply(pd.to_numeric)
 
     return aermod
 
@@ -128,42 +136,45 @@ for grid in grids:
     if path_chimney != '':
         for file in getFiles(path_chimney, 'xlsx'):
             if file.find(grid) != -1:
-                chimney_data = readAermod(file)
+                print(file)
                 try:
+                    chimney_data = readAermod(file, True)
                     chimney = pd.merge(chimney, chimney_data, on=['Time'])
                 except:
                     chimney = chimney_data
 
                 summation = chimney_data.copy() #added copy to remove the impact of changing underlying chimney_data
-
-    if path_construction != '':   
+    
+    if path_construction != '':
         for file in getFiles(path_construction, 'xlsx'):
             if file.find(grid) != -1:
-                construction_data = readAermod(file)
+                print(file)
                 try:
+                    construction_data = readAermod(file, True)
                     construction = pd.merge(construction, construction_data, on=['Time'])
                 except:
                     construction = construction_data
-
+                
                 summation.iloc[:,1:] = summation.iloc[:,1:].add(construction_data, fill_value = 0)
 
-# for file in getFiles(path_caline, 'xlsx'):
-#     if file.find(grid) != -1:
-#         xls = pd.ExcelFile(file)
-#         model1_data = xls.parse('Sheet1')
-#         model1_data = model1_data.drop(model1_data.columns[0], axis=1)
-#         model1_data.insert(0, column = 'Time', value = chimney_data['Time'].tolist())
-#         model1_data = model1_data.apply(pd.to_numeric)
-#         print(model1_data)
-#         summation = summation.add(model1_data, fill_value = 0)
-
-#summation['Time'] = summation['Time']/2 #problematic when not all grids have been run
+    if path_caline != '':
+        for file in getFiles(path_caline, 'xlsx'):
+            if file.find(grid) != -1:
+                print(file)
+                try:
+                    caline_data = readAermod(file, False)
+                    caline = pd.merge(caline, caline_data, on=['Time'])
+                except:
+                    caline = caline_data
+                
+                summation.iloc[:,1:] = summation.iloc[:,1:].add(caline_data, fill_value = 0)
 
     if path_marine != '':   
         for file in getFiles(path_marine, 'xlsx'):
             if file.find(grid) != -1:
-                marine_data = readAermod(file)
+                print(file)
                 try:
+                    marine_data = readAermod(file, False)
                     marine = pd.merge(marine, marine_data, on=['Time'])
                 except:
                     marine = marine_data
@@ -171,7 +182,7 @@ for grid in grids:
                 summation.iloc[:,1:] = summation.iloc[:,1:].add(marine_data, fill_value = 0)
 
     save_path = path_all + '\\'+ "{}.xlsx".format(grid)
-    summation.to_excel(save_path)
+    summation.to_excel(save_path, index=False)
  
 files_cmaq = getFiles(path_cmaq, 'txt')
 files_aermod = getFiles(path_all, 'xlsx')
@@ -194,11 +205,7 @@ def matrix(cmaq, aermod, factor_daily, factor_annual, factor_aermod, parse):
     
     data = data.reset_index(drop=True)
     
-    if parse == False:
-        xls = pd.ExcelFile(aermod)
-        aermod = xls.parse('Sheet1')
-    elif parse == True:
-        aermod = readAermod(aermod)
+    aermod = readAermod(aermod, parse)
 
     factor_daily = factor_daily #factor for cmeq
     factor_aermod = factor_aermod #factor for aermod
@@ -223,7 +230,7 @@ def populateDataFrame(files_aermod, files_cmaq, parse):
     PATH = pd.DataFrame()
     AERMOD =  pd.DataFrame()
     AERMODPATH =  pd.DataFrame()
-    AERMODPATH_24 = pd.DataFrame(dtype=float)
+    AERMODPATH_24 = pd.DataFrame()
     AERMODAN = pd.DataFrame()
 
     for file_aermod in files_aermod: #loop through each aermod files
@@ -260,7 +267,6 @@ if path_all != "":
 
     cols = AERMOD.columns.tolist()
     cols = cols[:1] + sorted(cols[1:])
-
     AERMOD = AERMOD[cols]
     AERMOD_24 = AERMOD_24[cols]
     AERMODPATH = AERMODPATH[cols]
@@ -294,7 +300,7 @@ if path_construction != "":
     sheet_name.append('Construction')
 
 if path_caline != "":
-    PATH_caline, AERMOD_caline, AERMOD_24_caline, AERMODPATH_caline, AERMODPATH_24_caline, AERMODAN_caline = populateDataFrame(files_caline, files_cmaq, True)
+    PATH_caline, AERMOD_caline, AERMOD_24_caline, AERMODPATH_caline, AERMODPATH_24_caline, AERMODAN_caline = populateDataFrame(files_caline, files_cmaq, False)
 
     cols_caline = list(set(cols) & set(caline.columns.tolist())) #sometime, tier 2 would not have the full list
     cols_caline.remove('Time')
@@ -306,7 +312,7 @@ if path_caline != "":
     sheet_name.append('Caline')
 
 if path_marine != "":
-    PATH_marine, AERMOD_marine, AERMOD_24_marine, AERMODPATH_marine, AERMODPATH_24_marine, AERMODAN_marine = populateDataFrame(files_marine, files_cmaq, True)  
+    PATH_marine, AERMOD_marine, AERMOD_24_marine, AERMODPATH_marine, AERMODPATH_24_marine, AERMODAN_marine = populateDataFrame(files_marine, files_cmaq, False)  
 
     cols_marine = list(set(cols) & set(marine.columns.tolist())) #sometime, tier 2 would not have the full list
     cols_marine.remove('Time')
